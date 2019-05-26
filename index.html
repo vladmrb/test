@@ -35,7 +35,7 @@
                 'dojo/dom'
         ], function (declare, Request, Memory, Grid, Selection, Pagination, TextBox, Button, FilteringSelect, dom) {
             var store = new Request({
-                target: 'http://arviem-api.us-east-1.elasticbeanstalk.com/tenant1/locations',
+                target: '//arviem-api.us-east-1.elasticbeanstalk.com/tenant1/locations',
                 idProperty: "resourceId",
                 sortParam: "sort",
                 rangeStartParam: "page",
@@ -124,7 +124,7 @@
             'dojo/json'
         ], function(request, registry, JSON) {
             fillForm = function() {
-                request.get("http://arviem-api.us-east-1.elasticbeanstalk.com" + resourceId, {
+                request.get("//arviem-api.us-east-1.elasticbeanstalk.com" + resourceId, {
                     handleAs: "json"
                 }).then(function(data){
                     for (var key in data) {
@@ -150,7 +150,7 @@
             };
             submitForm = function(data) {
                 if (resourceId) {
-                    request.put("http://arviem-api.us-east-1.elasticbeanstalk.com" + resourceId, {
+                    request.put("//arviem-api.us-east-1.elasticbeanstalk.com" + resourceId, {
                         data: JSON.stringify(data),
                         handleAs: 'json',
                         headers: {
@@ -166,7 +166,7 @@
                 } else {
                     delete data.version;
                     delete data.resourceId;
-                    request.post("http://arviem-api.us-east-1.elasticbeanstalk.com/tenant1/locations", {
+                    request.post("//arviem-api.us-east-1.elasticbeanstalk.com/tenant1/locations", {
                         data: JSON.stringify(data),
                         handleAs: 'json',
                         headers: {
