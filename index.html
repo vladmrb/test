@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Tutorial: Hello dgrid!</title>
+    <link rel="stylesheet" type="text/css" href="http://ajax.googleapis.com/ajax/libs/dojo/1.14.1/dojo/resources/dojo.css"> 
+    <link rel="stylesheet" type="text/css" href="http://ajax.googleapis.com/ajax/libs/dojo/1.14.1/dijit/themes/claro/claro.css"> 
+    <script src="//ajax.googleapis.com/ajax/libs/dojo/1.14.1/dojo/dojo.js"></script>
+
+    <script>
+        require({
+                packages: [{
+                    name: 'dgrid',
+                    location: '//cdn.jsdelivr.net/gh/SitePen/dgrid@0.4.4'
+                }, {
+                    name: 'dstore',
+                    location:'/test/dstore-1.1.2'
+                }, {
+                    name: 'xstyle',
+                    location:'//cdn.jsdelivr.net/gh/kriszyp/xstyle@0.3.3'
+                }, {
+                    name: 'put-selector',
+                    location: '//cdn.jsdelivr.net/gh/kriszyp/put-selector@0.3.6'
+                }]
+            },[
+                'dojo/_base/declare',
+                'dstore/Request',
+                'dojo/store/Memory',
+                'dgrid/Grid',
+                'dgrid/Selection',
+                'dgrid/extensions/Pagination',
+                'dijit/form/TextBox',
+                'dijit/form/Button',
+                'dijit/form/FilteringSelect',
+                'dojo/dom'
+        ], function (declare, Request, Memory, Grid, Selection, Pagination, TextBox, Button, FilteringSelect, dom) {
+            var store = new Request({
+                target: 'http://arviem-api.us-east-1.elasticbeanstalk.com/tenant1/locations',
+                idProperty: "resourceId",
+                sortParam: "sort",
+                rangeStartParam: "page",
+                rangeCountParam: "pageSize"
+            });
+            var grid = new (declare([ Grid, Selection, Pagination ]))({
+                collection: store,
+                className: 'dgrid-autoheight',
+                columns: {
+                    resourceId: "ID",
+                    name: 'Name',
+                    function: 'Function'
+                },
+                // previousNextArrows: false,
+                selectionMode: 'single',
+                pagingTextBox: true,
+                rowsPerPage: 15,
+                pageSizeOptions: [15, 30, 45],
+                // noDataMessage: 'No results found.'
+            }, 'grid');
+
+            grid.on('dgrid-select', function(event) {
+                for (var id in grid.selection) {
+                    if (grid.selection[id]) {
+                        editButton.set('label', "edit " + id);
+                        resourceId = id;
+                        editButton.set('disabled', false);
+                    }
+                }
+            });
+            grid.startup();
+
+            var idTextBox = new TextBox({}, "filter_id"); idTextBox.startup();
+            var nameTextBox = new TextBox({}, "filter_name"); nameTextBox.startup();
+            var functionTextBox = new FilteringSelect({
+                store: new Memory({
+                    data: [
+                        {id: "AIRPORT", name: "AIRPORT"},
+                        {id: "RAIL_TERMINAL", name: "RAIL_TERMINAL"},
+                        {id: "SEAPORT", name: "SEAPORT"}
+                    ]
+                })
+            }, "filter_function"); functionTextBox.startup();
+            var editButton = new Button({
+                label: "edit",
+                disabled: true,
+                onClick: function() {
+                    fillForm();
+                    dialog.show();
+                }
+            }, "edit_button");
+            var addButton = new Button({
+                label: "add",
+                onClick: function() {
+                    resourceId = null;
+                    form.reset();
+                    dialog.show();
+                }
+            }, "add_button");
+            var filterButton = new Button({
+                label: "filter",
+                onClick: function() {
+                    console.log(idTextBox.value, nameTextBox.value, functionTextBox.value);
+                    var flt = {};
+                    if (idTextBox.value) flt.id = idTextBox.value;
+                    if (nameTextBox.value) flt.name = nameTextBox.value;
+                    if (functionTextBox.value) flt.function = functionTextBox.value;
+                    grid.set('collection', store.filter(flt));
+                }
+            }, "filter_button");
+            var resetButton = new Button({
+                label: "reset",
+                onClick: function() {
+                    grid.set('collection', store);
+                    idTextBox.value = "";
+                    nameTextBox.value = "";
+                    functionTextBox.value = "";
+                }
+            }, "reset_button");
+        });
+
+        var fillForm, submitForm, resourceId;
+        require([
+            'dojo/request',
+            'dijit/registry',
+            'dojo/json'
+        ], function(request, registry, JSON) {
+            fillForm = function() {
+                request.get("http://arviem-api.us-east-1.elasticbeanstalk.com" + resourceId, {
+                    handleAs: "json"
+                }).then(function(data){
+                    for (var key in data) {
+                        if (typeof data[key] === 'object' && data[key] !== null) {
+                            for (var key2 in data[key]) {
+                                var elems = document.getElementsByName(key + "." + key2);
+                                if (elems.length === 0) {console.log("Couldn't find " + key + "." + key2); continue;}
+                                var id = elems[0].id || ("edit_" + key2);
+                                if (registry.byId(id))
+                                    registry.byId(id).set('value', data[key][key2]);
+                            }
+                            continue;
+                        }
+                        var elems = document.getElementsByName(key);
+                        if (elems.length === 0) {console.log("Couldn't find " + key); continue;}
+                        var id = elems[0].id || ("edit_" + key);
+                        if (elems.length > 0 && registry.byId(id)) registry.byId(id).set('value', data[key]);
+                    }
+                },
+                function(error){
+                    alert(error);
+                });
+            };
+            submitForm = function(data) {
+                if (resourceId) {
+                    request.put("http://arviem-api.us-east-1.elasticbeanstalk.com" + resourceId, {
+                        data: JSON.stringify(data),
+                        handleAs: 'json',
+                        headers: {
+                            'Content-Type' : 'application/json'
+                        }
+                    }).then(function(response) {
+                        alert("Submitted successfully");
+                        console.log(response);
+                    }, function(error) {
+                        alert("Error, see console");
+                        console.log(error);
+                    });
+                } else {
+                    delete data.version;
+                    delete data.resourceId;
+                    request.post("http://arviem-api.us-east-1.elasticbeanstalk.com/tenant1/locations", {
+                        data: JSON.stringify(data),
+                        handleAs: 'json',
+                        headers: {
+                            'Content-Type' : 'application/json'
+                        }
+                    }).then(function(response) {
+                        alert("Submitted successfully");
+                        console.log(response);
+                    }, function(error) {
+                        alert("Error, see console");
+                        console.log(error);
+                    });
+                }
+            };
+        });
+
+        var form, dialog;
+        require([
+            "dojo/dom-form",
+            'dojo/store/Memory',
+            "dijit/form/Form",
+            "dijit/Dialog",
+            "dijit/form/Button",
+            "dijit/form/NumberTextBox",
+            "dijit/form/ValidationTextBox",
+            "dijit/form/FilteringSelect",
+        ], function (domForm, Memory, Form, Dialog, Button, NumberTextBox, ValidationTextBox, FilteringSelect) {
+            form = new Form ({}, "editor");
+            dialog = new Dialog({title: "Add/Edit location"}, "AddEdit");
+            var edit_name = new ValidationTextBox({
+                name: "name",
+                required: true,
+                validator: function(value, constraints) {
+                    return (value.length >= 1 && value.length <= 60);
+                }
+            }, "edit_name");
+            var edit_normalizedName = new ValidationTextBox({
+                name: "normalizedName",
+                required: true,
+                validator: function(value, constraints) {
+                    return (value.length >= 1 && value.length <= 60 && value.match(/^[a-zA-Z0-9]+$/));
+                }
+            }, "edit_normalizedName");
+            var edit_latitudeInDegrees = new ValidationTextBox({
+                name: "coordinates.latitudeInDegrees",
+                required: true,
+                validator: function(value, constraints) {
+                    return (value.match(/^[-0-9.]+$/) && parseFloat(value) >= -90 && parseFloat(value) <= 90);
+                }
+            }, "edit_latitudeInDegrees");
+            var edit_longitudeInDegrees = new ValidationTextBox({
+                name: "coordinates.longitudeInDegrees",
+                required: true,
+                validator: function(value, constraints) {
+                    return (value.match(/^[-0-9.]+$/) && parseFloat(value) >= -180 && parseFloat(value) <= 180);
+                }
+            }, "edit_longitudeInDegrees");
+            var edit_city = new ValidationTextBox({
+                name: "address.city",
+                required: true,
+                validator: function(value, constraints) {
+                    return (value.length >= 1 && value.length <= 60 && value.match(/^[a-zA-Z0-9]+$/));
+                }
+            }, "edit_city");
+            var edit_country = new ValidationTextBox({
+                name: "address.country",
+                required: true,
+                regExp: '[A-Z][A-Z]'
+            }, "edit_country");
+            var edit_continent = new FilteringSelect({
+                name: "address.continent",
+                id: "edit_continent",
+                required: true,
+                store: new Memory({
+                    data: [
+                        {id: "AFRICA", name: "AFRICA"},
+                        {id: "ANTARCTICA", name: "ANTARCTICA"},
+                        {id: "ASIA", name: "ASIA"},
+                        {id: "EUROPE", name: "EUROPE"},
+                        {id: "NORTH_AMERICA", name: "NORTH_AMERICA"},
+                        {id: "OCEANIA", name: "OCEANIA"},
+                        {id: "SOUTH_AMERICA", name: "SOUTH_AMERICA"}
+                    ]
+                })
+            }, "edit_continent");
+            var edit_streetName = new ValidationTextBox({
+                name: "address.streetName"
+            }, "edit_streetName");
+            var edit_streetNumber = new ValidationTextBox({
+                name: "address.streetNumber"
+            }, "edit_streetNumber");
+            var edit_postalCode = new ValidationTextBox({
+                name: "address.postalCode"
+            }, "edit_postalCode");
+            var edit_administrativeLevel2 = new ValidationTextBox({
+                name: "address.administrativeLevel2"
+            }, "edit_administrativeLevel2");
+            var edit_administrativeLevel1 = new ValidationTextBox({
+                name: "address.administrativeLevel1"
+            }, "edit_administrativeLevel1");
+            var edit_function = new FilteringSelect({
+                name: "function",
+                id: "edit_function",
+                value: "",
+                store: new Memory({
+                    data: [
+                        {id: "", name: ""},
+                        {id: "AIRPORT", name: "AIRPORT"},
+                        {id: "RAIL_TERMINAL", name: "RAIL_TERMINAL"},
+                        {id: "SEAPORT", name: "SEAPORT"}
+                    ]
+                })
+            }, "edit_function");
+            var edit_version = new ValidationTextBox({
+                name: "version",
+                readonly: true
+            }, "edit_version");
+            var edit_resourceId = new ValidationTextBox({
+                name: "resourceId",
+                readonly: true
+            }, "edit_resourceId");
+
+            var edit_submit = new Button ({
+                label: "submit",
+                onClick: function() {
+                    if (form.validate()) {
+                        submitForm(form.getValues());
+                        dialog.hide();
+                    } else {
+                        alert('Form contains invalid data.  Please correct first');
+                        return false;
+                    }
+                }
+            }, "edit_submit");
+        });
+    </script>
+</head>
+<body class="claro">
+    <div id="grid"></div>
+    Filters:
+    <label for="filter_id">ID:</label>
+    <input type="text" id="filter_id">
+    <label for="filter_name">Name:</label>
+    <input type="text" id="filter_name">
+    <label for="filter_function">Function:</label>
+    <input type="text" id="filter_function">
+    <input type="button" id="filter_button">
+    <input type="button" id="reset_button">
+    <input type="button" id="edit_button">
+    <input type="button" id="add_button">
+    <div id="AddEdit">
+        <form id="editor">
+            <label for="edit_name">Name</label> <input type="text" id="edit_name"><br>
+            <label for="edit_normalizedName">Normalized name</label> <input type="text" id="edit_normalizedName"><br>
+            <label for="edit_latitudeInDegrees">Latitude</label> <input type="text" id="edit_latitudeInDegrees"><br>
+            <label for="edit_longitudeInDegrees">Longitude</label> <input type="text" id="edit_longitudeInDegrees"><br>
+            <label for="edit_city">City</label> <input type="text" id="edit_city"><br>
+            <label for="edit_country">Country</label> <input type="text" id="edit_country"><br>
+            <label for="edit_continent">Continent</label> <input type="text" id="edit_continent"><br>
+            <label for="edit_streetName">Street</label> <input type="text" id="edit_streetName"><br>
+            <label for="edit_streetNumber">Number</label> <input type="text" id="edit_streetNumber"><br>
+            <label for="edit_postalCode">Postal code</label> <input type="text" id="edit_postalCode"><br>
+            <label for="edit_administrativeLevel2">Administrative level 2</label> <input type="text" id="edit_administrativeLevel2"><br>
+            <label for="edit_administrativeLevel1">Administrative level 1</label> <input type="text" id="edit_administrativeLevel1"><br>
+            <label for="edit_function">Function</label> <input type="text" id="edit_function"><br>
+            <label for="edit_version">Version</label> <input type="text" id="edit_version"><br>
+            <label for="edit_resourceId">ID</label> <input type="text" id="edit_resourceId">
+        </form>
+        <input type="button" id="edit_submit">
+    </div>
+</body>
+</html>
